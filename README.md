@@ -1,41 +1,59 @@
+# Multi-Stack Microservices Demo (Upsun Edition)
+
 ## Overview
+This project is a comprehensive showcase of a polyglot microservices architecture running on **Upsun**. It demonstrates how to manage multiple technologies (Node.js, Go, Python, Java), shared services, and complex routing within a single Git repository using **Git-Driven Infrastructure**.
 
-- Platform.sh: https://console.platform.sh/solutions/xehql4bls2gga
-- Upsun: https://console.upsun.com/solutions/tycxag72kdycg
+## Special Remarks for Demoing
+This example is for learning purposes only and is not intended as a starting point for an actual production instance. 
 
-## Special remarks for demoing
+In this version, the project has been migrated to the **Upsun Unified Configuration** format, consolidating all infrastructure definitions into a single `.upsun/config.yaml` file.
 
-This example is for learning purposes only and is not intended as a starting point for an actual production instance.
+### Architecture Highlights
 
-In `.platform/applications.yaml`:
+#### Applications
+All application containers are defined under the `applications:` key in `.upsun/config.yaml`:
+* **Frontend**: A React application accessible at the apex domain.
+* **API Gateway**: A Node.js (KrakenD) gateway that proxies traffic to internal microservices.
+* **Microservices**: Four distinct services written in **Go, Java, Python, and Node.js**.
+* **Identity & Security**: A managed **Keycloak** instance and a **HashiCorp Vault** instance.
+* **Workers**: Two background workers (Python and Go) demonstrating asynchronous processing and the **Flex resource model** (defined with low CPU/RAM footprints).
+* **Shared Storage**: A Network Storage service mounted to the Python and Go applications/workers for shared data persistence.
 
-* We have a single React app as a front end accessible at the apex.
-* We have one API gateway written in nodejs that can proxy the other micro-services
-* We have 4 microservices, one in Go, one in Java, one in Python and one in NodeJS
-* a Keycloak instance
-* a Vault instance (depending on your usage pattern - we also have vault as a managed service when used as a KMS)
-* And we have added two worker instances - one in Python and one in Go - these do nothing actually (their start command is simply `sleep`) - but they show more topological options
-* For added realism we also introduce a network storage instance accessible by the Python and Golang apps and workers
+#### Services
+Defined under the `services:` key:
+* **PostgreSQL**: A shared database for microservices, configured with multiple schemas and specific **endpoints** (admin, reporter, and importer) to demonstrate granular access control via `relationships`.
+* **MariaDB**: A dedicated database for the Keycloak instance.
+* **Network Storage**: A persistent shared filesystem for polyglot data exchange.
 
-Apps: frontend, golang-service, java-service, keycloack, nodejs-service, nodejs-service-gateway, python-service, vault, python_queue_handler, go_queue_handler
+#### Routing
+Public exposure is managed under the `routes:` key:
+* `https://{default}/` -> Frontend
+* `https://api.{default}/` -> API Gateway
+* `https://keycloak.{default}/` -> Keycloak
+* `https://vault.{default}/` -> Vault
 
-## Notes:
+## Core Upsun Concepts Demonstrated
 
-* The configuration of the internal routing of the gateway is in `krakend/krakend.json` but again, this is just a toy. In real life our *Router* could actually have enough functionality to replace it if all you need is routing and caching.
-* We have sprinkled some relationships between apps and services so it could be demosntrated that inter-service routing is opt-in.
-* In this example we put everything in a single Yaml file. But there are other options such as putting a `.platform.app.yaml` in the root of each app.
+### 1. Unified Configuration
+All infrastructure—including the 10+ application containers and their supporting services—is defined in a single file: `.upsun/config.yaml`. This replaces the legacy `.platform/applications.yaml`, `.platform/services.yaml`, and `.platform/routes.yaml` structure.
 
-In `.platform/services.yaml`:
+### 2. Flex Resource Model
+Each container in this demo has explicitly defined resources (CPU and RAM). This allows you to right-size the Java service (which may need more memory) differently than a lightweight Go worker, optimizing both performance and cost.
 
-There are two databases: One a postgres to serve the microservices (as an example it is configured with two different schemas - and three "endpoints" or roles - admin, reporter and importer), and one MariaDB for Keycloack.
+### 3. Inter-Service Communication
+Internal routing is "opt-in." Applications can only communicate with services or other applications if a `relationship` is explicitly defined. This demo shows the API Gateway linked to the internal microservices, keeping them shielded from the public internet.
 
-Services: dbpostgres, keycloack-database
+### 4. Ephemeral Environments
+Because this is on Upsun, every Git branch creates a byte-for-byte clone of this entire stack. Running `upsun environment:branch my-feature` will clone all 10 apps and 2 databases into a preview environment with its own unique URLs.
 
-And in `.platform/routes.yaml`:
+## Deployment & Management
+To interact with this project, use the **Upsun CLI**:
 
-We expose public routes for the Frontend, the API gateway as well as for Vault and Keycloack.
-Routes: "https://{default}/", "https://api.{default}/", "https://keycloack.{default}", "https://vault.{default}/"
-
+* **Deploy changes**: `upsun push`
+* **Access a container**: `upsun ssh -a [app-name]`
+* **Scale resources**: `upsun resources:set`
+* **Stream logs**: `upsun log`
 
 ## Contribution
-- Initial demo by Ori, @jonas.kroeger moved it to this repo, but it's not actually maintained, still exists as a generic showcase of what is possible
+- Initial demo by Ori.
+- Ported to Upsun Unified Config by @Gemini-Upsun-Expert.
