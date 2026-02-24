@@ -1,0 +1,208 @@
+applications:
+    frontend:
+        source:
+            root: frontend
+        type: nodejs:14
+        build:
+            flavor: none
+        hooks:
+            build: |
+                yarn install
+                yarn build
+        dependencies:
+            nodejs:
+                yarn: "*"
+        web:
+            locations:
+                "/":
+                    root: "build"
+                    index:
+                        - "index.html"
+                    expires: 300s
+                    scripts: true
+                    allow: false
+                    rules:
+                        \.(css|js|gif|jpe?g|png|ttf|eot|woff2?|otf|html|ico|svg?)$:
+                            allow: true
+                        ^/robots\.txt$:
+                            allow: true
+    krakend:
+        source:
+            root: krakend
+        type: golang:1.17
+        hooks:
+            build: ./install.sh
+        web:
+            commands:
+                start: ./krakend run -c krakend.json -d
+        relationships:
+            nodejs-service: "nodejs-service:http"
+            python-service: "python-service:http"
+            golang-service: "golang-service:http"
+            java-service: "java-service:http"
+            keycloack: "keycloack:http"
+            vault: "vault:http"
+    nodejs-service:
+        source:
+            root: nodejs-service
+        type: nodejs:14
+        relationships:
+            reports: "dbpostgres:reporter"
+        web:
+            commands:
+                start: node index.js
+    python-service:
+        source:
+            root: python-service
+        type: 'python:3.9'
+        hooks:
+            build: pip install -r requirements.txt
+        mounts:
+            'network_dir':
+                source: service
+                service: files
+                source_path: our_stuff
+        relationships:
+            database: "dbpostgres:admin"
+            reports: "dbpostgres:reporter"
+        web:
+            commands:
+                start: python server.py
+        workers:
+            python_queue_handler:
+                commands:
+                    start: sleep infinity
+    golang-service:
+        source:
+            root: golang-service
+        hooks:
+            build: go build -o bin/app
+        type: golang:1.17
+        mounts:
+            'network_dir':
+                source: service
+                service: files
+                source_path: our_stuff
+        relationships:
+            database: "dbpostgres:admin"
+            reports: "dbpostgres:reporter"
+            imports: "dbpostgres:importer"
+        web:
+            commands:
+                start:  ./bin/app
+        workers:
+            go_queue_handler:
+                commands:
+                    start: sleep infinity
+    java-service:
+        source:
+            root: java-service
+        type: "java:11"
+        hooks:
+            build:  mvn clean package
+        web:
+            commands:
+                start: java -jar -Xmx$(jq .info.limits.memory /run/config.json)m -XX:+ExitOnOutOfMemoryError -Djboss.http.port=$PORT target/app-wildfly.jar
+    keycloack:
+        type: 'java:11'
+        source:
+            root: keycloack
+        variables:
+            env:
+                KC_VERSION: 8.0.2
+                JBOSS_HOME: /app
+                JDBC_MARIADB_VERSION: 2.2.3
+                LAUNCH_JBOSS_IN_BACKGROUND: 1
+        hooks:
+            build: ./build.sh
+        relationships:
+            database: 'keycloack-database:mariadb'
+        web:
+            commands:
+                start: ./start.sh
+            locations:
+                /:
+                    passthru: true
+        mounts:
+            'standalone/data':
+                source: local
+                source_path: data
+            'standalone/configuration':
+                source: local
+                source_path: configuration
+            'standalone/log':
+                source: local
+                source_path: log
+            'standalone/deployments':
+                source: local
+                source_path: deployments
+            'standalone/tmp':
+                source: local
+                source_path: tmp
+    vault:
+        type: 'golang:1.15'
+        source:
+            root: vault
+        hooks:
+            build: ./install.sh
+        mounts:
+            "/data":
+                source: local
+                source_path: data
+        web:
+            upstream:
+                socket_family: tcp
+                protocol: http
+            commands:
+                start: ./vault server -config=/app/conf/config.hcl
+            locations:
+                /:
+                    allow: false
+                    passthru: true
+services:
+  dbpostgres:
+    type: postgresql:13
+    configuration:
+        databases:
+            - main
+            - legacy
+        endpoints:
+            admin:
+                privileges:
+                    main: admin
+                    legacy: admin
+            reporter:
+                default_database: main
+                privileges:
+                    main: ro
+            importer:
+                default_database: legacy
+                privileges:
+                    legacy: rw
+  keycloack-database:
+      type: mariadb:10.4
+  #it's just to force a password to be generated
+      configuration:
+          schemas:
+              - main
+          endpoints:
+              mariadb:
+                  default_schema: main
+                  privileges:
+                      main: admin
+  files:
+      type: network-storage:1.0
+
+routes:
+  "https://{default}/":
+    type: upstream
+    upstream: "frontend:http"
+  "https://api.{default}/":
+      type: upstream
+      upstream: "krakend:http"
+  "https://keycloack.{default}/":
+      type: upstream
+      upstream: "keycloack:http"
+  "https://vault.{default}/":
+    type: upstream
+    upstream: "vault:http"
