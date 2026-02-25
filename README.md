@@ -1,4 +1,4 @@
-# Multi-Stack Microservices Demo (Upsun Edition)
+# Multi-Stack Microservices Demo (for IBM)
 
 ## Overview
 This project is a comprehensive showcase of a polyglot microservices architecture running on **Upsun**. It demonstrates how to manage multiple technologies (Node.js, Go, Python, Java), shared services, and complex routing within a single Git repository using **Git-Driven Infrastructure**.
