@@ -48,6 +48,7 @@ applications:
         type: nodejs:14
         relationships:
             reports: "dbpostgres:reporter"
+            rediscache: "redis:redis"
         web:
             commands:
                 start: node index.js
@@ -65,6 +66,7 @@ applications:
         relationships:
             database: "dbpostgres:admin"
             reports: "dbpostgres:reporter"
+            rediscache: "redis:redis"
         web:
             commands:
                 start: python server.py
@@ -87,6 +89,7 @@ applications:
             database: "dbpostgres:admin"
             reports: "dbpostgres:reporter"
             imports: "dbpostgres:importer"
+            rediscache: "redis:redis"
         web:
             commands:
                 start:  ./bin/app
@@ -190,6 +193,8 @@ services:
                   default_schema: main
                   privileges:
                       main: admin
+  redis:
+      type: redis:7.2
   files:
       type: network-storage:1.0
 
